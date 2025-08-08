@@ -588,12 +588,12 @@ function updateReport(){
   byId('monthlyAmount').textContent = '¥'+r.total.toLocaleString();
   byId('supplierCount').textContent = Object.keys(r.totals).length;
   byId('transactionCount').textContent = r.details.length;
-  const now = new Date(); byId('lastUpdate').textContent = ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')};
+  const now = new Date(); byId('lastUpdate').textContent = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
 
   const tbody = byId('supplierReport'); tbody.innerHTML='';
   const entries = Object.entries(r.totals).sort((a,b)=>b[1]-a[1]);
   if(entries.length===0){
-    tbody.innerHTML = <tr><td colspan="5" style="text-align:center;color:#6b7280;padding:24px;">今月の発注データはありません</td></tr>;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#6b7280;padding:24px;">今月の発注データはありません</td></tr>`;
     return;
   }
   entries.forEach(([s,amt])=>{
@@ -601,10 +601,10 @@ function updateReport(){
     const count = r.counts[s]||0;
     const q = r.qtys[s]||0;
     const avg = q>0 ? Math.round(amt/q) : 0;
-    const bar = <div style="width:120px;height:6px;background:#eee;border-radius:4px;"><div style="width:${perc}%;height:6px;background:#8b5cf6;border-radius:4px;"></div></div>;
-    tbody.insertAdjacentHTML('beforeend', <tr>
+    const bar = `<div style="width:120px;height:6px;background:#eee;border-radius:4px;"><div style="width:${perc}%;height:6px;background:#8b5cf6;border-radius:4px;"></div></div>`;
+    tbody.insertAdjacentHTML('beforeend', `<tr>
       <td><b>${s}</b></td><td>¥${amt.toLocaleString()}</td><td style="display:flex;align-items:center;gap:8px;">${perc}% ${bar}</td><td>${count}</td><td>¥${avg.toLocaleString()}</td>
-    </tr>);
+    </tr>`);
   });
 }
 
@@ -642,7 +642,7 @@ function renderProducts(){
   products.forEach(p=>{
     const row = document.createElement('tr');
     if(editingProductId===p.id){
-      row.innerHTML = 
+      row.innerHTML = `
         <td><input class="edit-name" value="${p.name}"/></td>
         <td><input class="edit-supplier" value="${p.supplier}"/></td>
         <td>${p.category}</td>
@@ -652,10 +652,10 @@ function renderProducts(){
         <td>
           <button class="btn" onclick="saveProduct(${p.id})">保存</button>
           <button class="btn btn-secondary" onclick="cancelEdit()">取消</button>
-        </td>;
+        </td>`;
     }else{
-      row.innerHTML = 
-        <td>${p.name}${p.alias?<br><small style="color:#6b7280;">別名: ${p.alias}</small>:''}</td>
+      row.innerHTML = `
+        <td>${p.name}${p.alias?`<br><small style="color:#6b7280;">別名: ${p.alias}</small>`:''}</td>
         <td><b>${p.supplier}</b></td>
         <td>${p.category}</td>
         <td>${p.currentStock} 本</td>
@@ -664,7 +664,7 @@ function renderProducts(){
         <td>
           <button class="btn" onclick="editProduct(${p.id})">編集</button>
           <button class="btn btn-danger" onclick="deleteProduct(${p.id})">削除</button>
-        </td>;
+        </td>`;
     }
     tb.appendChild(row);
   });
@@ -674,7 +674,7 @@ function editProduct(id){ editingProductId=id; renderProducts(); }
 function cancelEdit(){ editingProductId=null; renderProducts(); }
 
 function saveProduct(id){
-  const tr = document.querySelector(#productsTable tr:nth-child(${products.findIndex(p=>p.id===id)+1}));
+  const tr = document.querySelector(`#productsTable tr:nth-child(${products.findIndex(p=>p.id===id)+1})`);
   const name = tr.querySelector('.edit-name').value.trim();
   const supplier = tr.querySelector('.edit-supplier').value.trim();
   const stock = parseInt(tr.querySelector('.edit-stock').value,10);
@@ -690,7 +690,7 @@ function saveProduct(id){
 
 function deleteProduct(id){
   const p = products.find(x=>x.id===id); if(!p) return;
-  if(!confirm(「${p.name}」を削除しますか？関連する取引も消えます。)) return;
+  if(!confirm(`「${p.name}」を削除しますか？関連する取引も消えます。`)) return;
   transactions = transactions.filter(t=>t.productId!==id);
   products = products.filter(x=>x.id!==id);
   renderProducts(); renderTransactions(); refreshSelectors(); updateDashboard(); updateReport();
@@ -699,7 +699,7 @@ function deleteProduct(id){
 }
 
 function deleteAllProducts(){
-  if(!confirm(全商品(${products.length})を削除します。続行しますか？)) return;
+  if(!confirm(`全商品(${products.length})を削除します。続行しますか？`)) return;
   const ids = products.map(p=>p.id);
   transactions = transactions.filter(t=> !ids.includes(t.productId));
   products = [];
@@ -715,18 +715,18 @@ function renderStaff(){
   const tb = byId('staffTable'); tb.innerHTML='';
   staff.forEach(s=>{
     const row = document.createElement('tr');
-    row.innerHTML = 
+    row.innerHTML = `
       <td>${s.staffCode||''}</td><td>${s.name}</td>
       <td><span class="tag ${s.role==='店長'?'tag-purple':s.role==='スタイリスト'?'tag-blue':'tag-green'}">${s.role||'スタッフ'}</span></td>
       <td>${s.joinDate||''}</td>
-      <td><button class="btn btn-danger" onclick="deleteStaff(${s.id})">削除</button></td>;
+      <td><button class="btn btn-danger" onclick="deleteStaff(${s.id})">削除</button></td>`;
     tb.appendChild(row);
   });
 }
 
 function deleteStaff(id){
   const s = staff.find(x=>x.id===id); if(!s) return;
-  if(!confirm(「${s.name}」を削除しますか？)) return;
+  if(!confirm(`「${s.name}」を削除しますか？`)) return;
   staff = staff.filter(x=>x.id!==id);
   renderStaff(); refreshSelectors();
   isCloudMode? saveToCloud(): saveAllData();
@@ -737,9 +737,9 @@ function deleteStaff(id){
    10) 取引
 ========================= */
 function refreshSelectors(){
-  const selP = byId('transactionProduct'); if(selP){ selP.innerHTML='<option value="">商品を選択</option>'; products.forEach(p=> selP.insertAdjacentHTML('beforeend', <option value="${p.id}">${p.name}</option>)); }
-  const selS = byId('transactionStaff'); if(selS){ selS.innerHTML='<option value="">担当を選択</option>'; staff.forEach(s=> selS.insertAdjacentHTML('beforeend', <option>${s.name}</option>)); }
-  const ocrS = byId('ocrStaffSelect'); if(ocrS){ ocrS.innerHTML='<option value="">担当スタッフを選択</option>'; staff.forEach(s=> ocrS.insertAdjacentHTML('beforeend', <option>${s.name}</option>)); }
+  const selP = byId('transactionProduct'); if(selP){ selP.innerHTML='<option value="">商品を選択</option>'; products.forEach(p=> selP.insertAdjacentHTML('beforeend', `<option value="${p.id}">${p.name}</option>`)); }
+  const selS = byId('transactionStaff'); if(selS){ selS.innerHTML='<option value="">担当を選択</option>'; staff.forEach(s=> selS.insertAdjacentHTML('beforeend', `<option>${s.name}</option>`)); }
+  const ocrS = byId('ocrStaffSelect'); if(ocrS){ ocrS.innerHTML='<option value="">担当スタッフを選択</option>'; staff.forEach(s=> ocrS.insertAdjacentHTML('beforeend', `<option>${s.name}</option>`)); }
 }
 
 function showAddTransaction(){ byId('addTransactionArea').classList.remove('hidden'); }
@@ -771,8 +771,8 @@ function renderTransactions(){
   const labels = { order:'発注', receipt:'入荷', use:'使用', sale:'販売' };
   transactions.forEach(t=>{
     const p = products.find(x=>x.id===t.productId);
-    const name = p? p.name: 削除された商品 (ID:${t.productId});
-    tb.insertAdjacentHTML('beforeend', <tr>
+    const name = p? p.name: `削除された商品 (ID:${t.productId})`;
+    tb.insertAdjacentHTML('beforeend', `<tr>
       <td>${t.date} <small>${t.time}</small></td>
       <td>${name}</td>
       <td><span class="tag ${styles[t.type]||'tag-blue'}">${labels[t.type]||t.type}</span></td>
@@ -780,14 +780,14 @@ function renderTransactions(){
       <td>${t.staffName||''}</td>
       <td>${t.memo||''}</td>
       <td><button class="btn btn-danger" onclick="deleteTransaction(${t.id})">削除</button></td>
-    </tr>);
+    </tr>`);
   });
 }
 
 function deleteTransaction(id){
   const t = transactions.find(x=>x.id===id); if(!t) return;
   const p = products.find(x=>x.id===t.productId);
-  if(!confirm(この取引を削除しますか？\n商品:${p?p.name:ID:${t.productId}} 種別:${t.type} 数量:${t.quantity})) return;
+  if(!confirm(`この取引を削除しますか？\n商品:${p?p.name:`ID:${t.productId}`} 種別:${t.type} 数量:${t.quantity}`)) return;
   if(p){
     if(t.type==='receipt') p.currentStock = Math.max(0, p.currentStock - t.quantity);
     if(t.type==='use' || t.type==='sale') p.currentStock += t.quantity;
@@ -880,7 +880,7 @@ function openOCRModal(){
 function closeOCRModal(){ byId('ocrModal').classList.remove('show'); }
 function printOCRTemplate(){
   const w=window.open('','_blank');
-  w.document.write(<html><head><title>在庫使用記録シート</title></head><body style="font-family:Meiryo;font-size:16pt;line-height:2.2;padding:30px;">
+  w.document.write(`<html><head><title>在庫使用記録シート</title></head><body style="font-family:Meiryo;font-size:16pt;line-height:2.2;padding:30px;">
     <h2 style="text-align:center;">在庫使用記録シート</h2>
     <p>日付: ____________　担当: ____________</p><hr/>
     <div>□ キャラデコ _______ 本</div>
@@ -890,7 +890,7 @@ function printOCRTemplate(){
     <div>□ シェルパホームケア _______ 本</div>
     <div>□ その他: _____________ _______ 本</div>
     <hr/><p>備考: ________________________________</p>
-  </body></html>);
+  </body></html>`);
   w.document.close(); w.print();
 }
 
@@ -973,7 +973,7 @@ async function ensureOCRWorker(){
 async function handleOCRFile(ev){
   const f = ev.target.files[0]; if(!f) return;
   const dataUrl = await loadImageWithOrientation(f);
-  byId('ocrPreview').innerHTML = <img src="${dataUrl}"/>;
+  byId('ocrPreview').innerHTML = `<img src="${dataUrl}"/>`;
   byId('ocrPreview').classList.remove('hidden');
   byId('ocrResults').classList.add('hidden');
   byId('ocrLoading').classList.remove('hidden');
@@ -1069,16 +1069,16 @@ function lev(a,b){
 function renderOCRTable(records){
   const tb = byId('ocrTableBody'); tb.innerHTML='';
   records.forEach((r,idx)=>{
-    const selId = ocrProdSel_${idx};
-    const qtyId = ocrQty_${idx};
-    const unitId = ocrUnit_${idx};
+    const selId = `ocrProdSel_${idx}`;
+    const qtyId = `ocrQty_${idx}`;
+    const unitId = `ocrUnit_${idx}`;
     // 商品候補セレクト
-    let opts = <option value="">（候補から選択）</option>;
+    let opts = `<option value="">（候補から選択）</option>`;
     products.forEach(p=>{
       const selected = (r.productId===p.id)? 'selected':'';
-      opts += <option value="${p.id}" ${selected}>${p.name}</option>;
+      opts += `<option value="${p.id}" ${selected}>${p.name}</option>`;
     });
-    tb.insertAdjacentHTML('beforeend', <tr>
+    tb.insertAdjacentHTML('beforeend', `<tr>
       <td>
         <div style="display:flex; gap:6px;">
           <select id="${selId}" style="min-width:260px;">${opts}</select>
@@ -1088,11 +1088,11 @@ function renderOCRTable(records){
       <td><input id="${qtyId}" type="number" value="${r.qty||1}" style="max-width:100px; text-align:right;"></td>
       <td>
         <select id="${unitId}" style="max-width:110px;">
-          ${['本','個','ml','g'].map(u=><option ${r.unit===u?'selected':''}>${u}</option>).join('')}
+          ${['本','個','ml','g'].map(u=>`<option ${r.unit===u?'selected':''}>${u}</option>`).join('')}
         </select>
       </td>
       <td><button class="btn btn-danger" onclick="this.closest('tr').remove()">削除</button></td>
-    </tr>);
+    </tr>`);
   });
 }
 
@@ -1133,7 +1133,7 @@ function confirmOCRRecords(){
       id: Date.now()+Math.floor(Math.random()*1000),
       productId: pid, type:'use', quantity:r.qty,
       date: fmtYmd(now), time: fmtHm(now),
-      staffName, memo: OCR(${r.unit})
+      staffName, memo: `OCR(${r.unit})`
     });
     const p = products.find(x=>x.id===pid);
     if(p) p.currentStock = Math.max(0, (p.currentStock||0) - r.qty);
