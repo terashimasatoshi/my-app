@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>美容室在庫管理システム - クラウド版（OCR対応 完全版）</title>
+
+<!-- 可用フラグ -->
+<script>
+  window.firebaseAvailable = false;
+  window.papaParseAvailable = false;
+  window.tesseractAvailable = false;
+</script>
+
+<!-- ライブラリ -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js" onload="window.firebaseAvailable=true" onerror="console.warn('Firebase app load error')"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js" onerror="console.warn('Firestore load error')"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js" onerror="console.warn('Auth load error')"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" onload="window.papaParseAvailable=true" onerror="console.warn('PapaParse load error')"></script>
+<script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.min.js" onerror="console.warn('piexifjs load error')"></script>
+<script src="https://unpkg.com/tesseract.js@4.0.2/dist/tesseract.min.js" onload="window.tesseractAvailable=true" onerror="console.warn('Tesseract load error')"></script>
+
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:#f6f7fb; color:#222; }
+  .container { max-width:1200px; margin:0 auto; padding:20px; }
+  .card { background:#fff; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.08); overflow:hidden; margin-bottom:20px; }
+  .card-hd { padding:18px 20px; border-bottom:1px solid #eee; display:flex; align-items:center; justify-content:space-between; }
+  .card-bd { padding:20px; }
+  .btn { border:0; border-radius:10px; padding:10px 14px; font-weight:600; cursor:pointer; }
+  .btn-primary { background:linear-gradient(135deg,#ec4899,#8b5cf6); color:#fff; }
+  .btn-secondary { background:#6b7280; color:#fff; }
+  .btn-danger { background:#dc2626; color:#fff; }
+  .tag { display:inline-block; padding:4px 8px; border-radius:999px; font-size:12px; font-weight:700; }
+  .tag-blue { background:#e0e7ff; color:#3730a3; }
+  .tag-green { background:#d1fae5; color:#065f46; }
+  .tag-orange { background:#ffedd5; color:#9a3412; }
+  .tag-purple { background:#f3e8ff; color:#6b21a8; }
+  table { width:100%; border-collapse:collapse; }
+  th,td { padding:10px 8px; border-bottom:1px solid #eee; text-align:left; }
+  th { background:#fafafa; font-size:12px; letter-spacing:.04em; text-transform:uppercase; color:#6b7280; }
+  input,select { width:100%; padding:10px; border:1px solid #e5e7eb; border-radius:8px; font-size:14px; }
+  .row { display:grid; gap:12px; grid-template-columns: repeat(4,1fr); }
+  .row-2 { grid-template-columns: repeat(2,1fr); }
+  .row-3 { grid-template-columns: repeat(3,1fr); }
+  .hidden { display:none; }
+  .toast { position:fixed; right:16px; bottom:16px; background:#111; color:#fff; padding:10px 14px; border-radius:999px; opacity:0; transition:.25s; }
+  .toast.show { opacity:1; }
+
+  /* モーダル */
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; z-index:1000; }
+  .modal.show { display:flex; }
+  .modal-inner { width:min(95vw,900px); max-height:90vh; overflow:auto; background:#fff; border-radius:16px; }
+  .modal-hd { padding:16px 18px; border-bottom:1px solid #eee; display:flex; align-items:center; justify-content:space-between; }
+  .modal-bd { padding:18px; }
+
+  /* ヘッダー */
+  .hdr { background:linear-gradient(135deg,#ec4899,#8b5cf6); color:#fff; padding:22px; }
+  .hdr .sub { opacity:.9; }
+
+  /* タブ */
+  .tabs { display:flex; gap:6px; margin:16px 0; flex-wrap:wrap; }
+  .tab { background:#fff; padding:10px 14px; border-radius:10px; border:1px solid #eee; cursor:pointer; }
+  .tab.active { background:#8b5cf6; color:#fff; border-color:#8b5cf6; }
+
+  /* OCRプレビュー */
+  .ocr-preview { text-align:center; }
+  .ocr-preview img { max-width:100%; max-height:360px; border-radius:8px; border:1px solid #eee; }
+  .ocr-loading { text-align:center; padding:24px; }
+  .spinner { width:46px; height:46px; border:3px solid #eee; border-top:3px solid #8b5cf6; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto; }
+  @keyframes spin { to { transform: rotate(360deg);} }
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="container">
+    <h1 style="margin:0;">美容室在庫管理システム ☁️</h1>
+    <div class="sub">クラウド同期 & OCR読み取り（VSCode貼付け用 完全版）</div>
+  </div>
+</div>
+
+<div class="container">
+  <!-- ログイン -->
+  <div id="loginCard" class="card">
+    <div class="card-hd"><strong>ログイン</strong><span id="modeText" class="tag tag-purple">ローカルモード</span></div>
+    <div class="card-bd">
+      <div class="row row-3">
+        <div><label>ユーザー名</label><input id="loginUsername" value="admin"/></div>
+        <div><label>パスワード</label><input id="loginPassword" type="password" value="password"/></div>
+        <div style="display:flex; align-items:flex-end; gap:8px;">
+          <button class="btn btn-primary" onclick="login(event)">ログイン</button>
+          <button class="btn btn-secondary" onclick="showFirebaseSetup()">クラウド設定</button>
+        </div>
+      </div>
+      <div style="margin-top:10px; font-size:12px; color:#6b7280">
+        デモ：ユーザー名 <b>admin</b> / パスワード <b>password</b>
+      </div>
+    </div>
+  </div>
+
+  <!-- メイン -->
+  <div id="app" class="hidden">
+    <div class="card">
+      <div class="card-hd">
+        <div>
+          <strong>ダッシュボード</strong>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span id="cloudStatus" class="tag tag-blue">未接続</span>
+          <button class="btn btn-primary" onclick="saveToCloud()">☁️ クラウド保存</button>
+          <button class="btn" onclick="loadCloudData()">🔄 最新取得</button>
+          <button class="btn btn-danger" onclick="clearCloudData()">🗑️ クラウド全削除</button>
+          <button class="btn" onclick="logout()">ログアウト</button>
+        </div>
+      </div>
+      <div class="card-bd">
+        <div class="row row-4">
+          <div><div>総商品数</div><h2 id="kpiProducts" style="margin:.25em 0">0</h2></div>
+          <div><div>要注意在庫（0以下）</div><h2 id="kpiLow" style="margin:.25em 0">0</h2></div>
+          <div><div>適正在庫（>0）</div><h2 id="kpiOk" style="margin:.25em 0">0</h2></div>
+          <div><div>棚卸金額</div><h2 id="kpiValue" style="margin:.25em 0">¥0</h2></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- タブ -->
+    <div class="tabs">
+      <div class="tab active" data-tab="products" onclick="switchTab(event,'products')">📦 商品マスタ</div>
+      <div class="tab" data-tab="staff" onclick="switchTab(event,'staff')">👥 スタッフマスタ</div>
+      <div class="tab" data-tab="transactions" onclick="switchTab(event,'transactions')">📋 取引記録</div>
+      <div class="tab" data-tab="reports" onclick="switchTab(event,'reports')">📈 月次レポート</div>
+      <div class="tab" data-tab="settings" onclick="switchTab(event,'settings')">⚙️ 設定</div>
+    </div>
+
+    <!-- 商品 -->
+    <div id="tab-products" class="card">
+      <div class="card-hd">
+        <strong>商品マスタ</strong>
+        <div style="display:flex; gap:8px;">
+          <button class="btn" onclick="showAddProduct()">➕ 追加</button>
+          <button class="btn btn-secondary" onclick="showCsvModal('products')">📤 CSV一括</button>
+          <button class="btn btn-danger" onclick="deleteAllProducts()">🗑️ 全削除</button>
+        </div>
+      </div>
+      <div class="card-bd">
+        <div id="addProductArea" class="hidden">
+          <div class="row row-4" style="margin-bottom:10px;">
+            <div><label>商品名</label><input id="productName"/></div>
+            <div><label>適正在庫</label><input id="optimalStock" type="number"/></div>
+            <div><label>単価</label><input id="unitPrice" type="number"/></div>
+            <div><label>仕入先</label><input id="supplier"/></div>
+          </div>
+          <div class="row row-2" style="margin-bottom:12px;">
+            <div><label>カテゴリ</label>
+              <select id="category">
+                <option>カラー剤</option><option>シャンプー</option><option>トリートメント</option>
+                <option>パーマ液</option><option>スタイリング</option><option>その他</option>
+              </select>
+            </div>
+            <div><label>エイリアス（OCR表記ゆれ対策, カンマ区切り）</label><input id="alias"/></div>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-primary" onclick="addProduct()">追加</button>
+            <button class="btn" onclick="hideAddProduct()">キャンセル</button>
+          </div>
+          <hr style="margin:16px 0;">
+        </div>
+
+        <table>
+          <thead><tr>
+            <th>商品名</th><th>仕入先</th><th>カテゴリ</th><th>現在庫</th><th>適正在庫</th><th>単価</th><th>操作</th>
+          </tr></thead>
+          <tbody id="productsTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- スタッフ -->
+    <div id="tab-staff" class="card hidden">
+      <div class="card-hd">
+        <strong>スタッフマスタ</strong>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-secondary" onclick="showCsvModal('staff')">📤 CSV一括</button>
+        </div>
+      </div>
+      <div class="card-bd">
+        <table>
+          <thead><tr><th>コード</th><th>氏名</th><th>役職</th><th>入社日</th><th>操作</th></tr></thead>
+          <tbody id="staffTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 取引 -->
+    <div id="tab-transactions" class="card hidden">
+      <div class="card-hd">
+        <strong>取引記録</strong>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-secondary" onclick="openOCRModal()">📸 OCR取り込み</button>
+          <button class="btn" onclick="showAddTransaction()">➕ 取引追加</button>
+        </div>
+      </div>
+      <div class="card-bd">
+        <div id="addTransactionArea" class="hidden" style="margin-bottom:14px;">
+          <div class="row row-3">
+            <div><label>商品</label><select id="transactionProduct"></select></div>
+            <div><label>種別</label>
+              <select id="transactionType">
+                <option value="order">発注</option>
+                <option value="receipt">入荷</option>
+                <option value="use" selected>使用</option>
+                <option value="sale">販売</option>
+              </select>
+            </div>
+            <div><label>数量</label><input id="transactionQuantity" type="number"/></div>
+          </div>
+          <div class="row row-3" style="margin-top:10px;">
+            <div><label>担当</label><select id="transactionStaff"></select></div>
+            <div><label>メモ</label><input id="transactionMemo"/></div>
+            <div style="display:flex; align-items:flex-end; gap:8px;">
+              <button class="btn btn-primary" onclick="addTransaction()">追加</button>
+              <button class="btn" onclick="hideAddTransaction()">キャンセル</button>
+            </div>
+          </div>
+          <hr style="margin:16px 0;">
+        </div>
+
+        <table>
+          <thead><tr>
+            <th>日時</th><th>商品</th><th>種別</th><th>数量</th><th>担当</th><th>メモ</th><th>操作</th>
+          </tr></thead>
+          <tbody id="transactionsTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- レポート -->
+    <div id="tab-reports" class="card hidden">
+      <div class="card-hd"><strong>月次レポート</strong></div>
+      <div class="card-bd">
+        <div class="row row-4">
+          <div><div>当月発注額</div><h2 id="monthlyAmount">¥0</h2></div>
+          <div><div>仕入先数</div><h2 id="supplierCount">0</h2></div>
+          <div><div>取引件数</div><h2 id="transactionCount">0</h2></div>
+          <div><div>最終更新</div><h2 id="lastUpdate">-</h2></div>
+        </div>
+        <div style="margin-top:10px;">
+          <table>
+            <thead><tr><th>仕入先</th><th>金額</th><th>割合</th><th>回数</th><th>平均単価</th></tr></thead>
+            <tbody id="supplierReport"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 設定 -->
+    <div id="tab-settings" class="card hidden">
+      <div class="card-hd"><strong>設定</strong></div>
+      <div class="card-bd">
+        <div class="row row-3">
+          <div>商品: <b id="statProducts">0</b></div>
+          <div>スタッフ: <b id="statStaff">0</b></div>
+          <div>取引: <b id="statTransactions">0</b></div>
+        </div>
+        <div style="margin-top:10px; display:flex; gap:8px;">
+          <button class="btn" onclick="exportData()">📤 エクスポート</button>
+          <button class="btn" onclick="importData()">📥 インポート</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase設定モーダル -->
+<div id="firebaseModal" class="modal">
+  <div class="modal-inner">
+    <div class="modal-hd">
+      <strong>Firebase設定</strong>
+      <button class="btn" onclick="closeFirebaseSetup()">✕</button>
+    </div>
+    <div class="modal-bd">
+      <p>Firebase Consoleで作成したWebアプリの設定オブジェクトを貼り付けてください。</p>
+      <textarea id="firebaseConfig" rows="10" style="width:100%; font-family:monospace;"></textarea>
+      <div style="margin-top:10px; display:flex; gap:8px;">
+        <button class="btn btn-primary" onclick="setupFirebase()">接続</button>
+        <button class="btn" onclick="useLocalMode()">ローカルで使う</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OCRモーダル -->
+<div id="ocrModal" class="modal">
+  <div class="modal-inner">
+    <div class="modal-hd">
+      <strong>📸 使用記録の読み取り（OCR）</strong>
+      <button class="btn" onclick="closeOCRModal()">✕</button>
+    </div>
+    <div class="modal-bd">
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+        <input id="ocrFile" type="file" accept="image/*" style="display:none" onchange="handleOCRFile(event)"/>
+        <button class="btn btn-primary" onclick="document.getElementById('ocrFile').click()">画像を選択</button>
+        <button class="btn" onclick="printOCRTemplate()">🖨️ 記録用紙を印刷</button>
+        <select id="ocrStaffSelect" style="max-width:240px;">
+          <option value="">担当スタッフを選択</option>
+        </select>
+      </div>
+      <div id="ocrPreview" class="ocr-preview hidden"></div>
+      <div id="ocrLoading" class="ocr-loading hidden">
+        <div class="spinner"></div>
+        <div style="margin-top:10px;">画像を解析中...</div>
+      </div>
+      <div id="ocrResults" class="hidden">
+        <h3>認識結果の確認</h3>
+        <table>
+          <thead><tr><th>商品名（候補）</th><th>数量</th><th>単位</th><th></th></tr></thead>
+          <tbody id="ocrTableBody"></tbody>
+        </table>
+        <div style="margin-top:10px; display:flex; gap:8px;">
+          <button class="btn" onclick="addOCRRow()">➕ 行を追加</button>
+          <button class="btn btn-primary" onclick="confirmOCRRecords()">✅ 確定して記録</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"><span id="toastText"></span></div>
+
+<script>
+/* =========================
+   0) 状態
+========================= */
+let isCloudMode = false;
+let db = null;
+let currentUser = null;
+
+// データ（空で持つ）: サンプルはローカル初回のみ投入
+let products = [];
+let staff = [];
+let transactions = [];
+
+// 編集中
+let editingProductId = null;
+let currentCsvType = 'products';
+
+/* =========================
+   1) ユーティリティ
+========================= */
+function showToast(msg){ const t=document.getElementById('toast'); document.getElementById('toastText').textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
+function byId(id){ return document.getElementById(id); }
+function saveLocal(key,val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
+function loadLocal(key, def=null){ try{ const s=localStorage.getItem(key); return s? JSON.parse(s): def; }catch(e){ return def; } }
+function fmtYmd(dt){ return dt.toISOString().slice(0,10); }
+function fmtHm(dt){ return dt.toTimeString().slice(0,5); }
+
+/* =========================
+   2) Firebase 設定
+========================= */
+function showFirebaseSetup(){ byId('firebaseModal').classList.add('show'); }
+function closeFirebaseSetup(){ byId('firebaseModal').classList.remove('show'); }
+function useLocalMode(){
+  isCloudMode=false;
+  byId('modeText').textContent='ローカルモード';
+  byId('cloudStatus').textContent='ローカル';
+  closeFirebaseSetup();
+}
+function setupFirebase(){
+  if(!window.firebaseAvailable){ alert('Firebaseが読み込めていません'); return; }
+  const txt = byId('firebaseConfig').value.trim();
+  if(!txt){ alert('設定を貼り付けてください'); return; }
+  try{
+    const cfg = txt.startsWith('{') ? eval('('+txt+')') : JSON.parse(txt);
+    firebase.initializeApp(cfg);
+    db = firebase.firestore();
+    isCloudMode = true;
+    saveLocal('firebaseConfig', cfg);
+    byId('modeText').textContent='クラウド同期';
+    byId('cloudStatus').textContent='接続済み';
+    closeFirebaseSetup();
+    showToast('✅ Firebase接続完了');
+  }catch(e){
+    alert('設定エラー: '+e.message);
+  }
+}
+
+/* =========================
+   3) 認証（簡易）
+========================= */
+let users = loadLocal('beautyInventoryUsers', { admin:{ password:'password', displayName:'管理者' } });
+
+async function login(ev){
+  if(ev) ev.preventDefault();
+  const u = byId('loginUsername').value.trim();
+  const p = byId('loginPassword').value.trim();
+  if(!users[u] || users[u].password !== p){ alert('ユーザー名またはパスワードが違います'); return; }
+  currentUser = u;
+
+  // 先にクラウドをロード → 初期化描画
+  if(isCloudMode){
+    await loadCloudData();
+  }
+  initializeApp(); // ローカル or クラウドの現状を描画
+
+  byId('loginCard').classList.add('hidden');
+  byId('app').classList.remove('hidden');
+  showToast('✅ ログイン成功');
+}
+
+function logout(){
+  currentUser=null;
+  byId('app').classList.add('hidden');
+  byId('loginCard').classList.remove('hidden');
+}
+
+/* =========================
+   4) 初期化＆描画
+========================= */
+function seedLocalSamples_(){
+  products = [
+    { id:1, name:'ロレアル カラー剤 6番', category:'カラー剤', currentStock:15, optimalStock:20, unitPrice:1200, supplier:'ロレアル', alias:'' },
+    { id:2, name:'ミルボン シャンプー', category:'シャンプー', currentStock:8, optimalStock:12, unitPrice:2800, supplier:'ミルボン', alias:'MILBON' },
+    { id:3, name:'ウエラ パーマ液', category:'パーマ液', currentStock:5, optimalStock:10, unitPrice:1800, supplier:'ウエラ', alias:'WELLA' },
+    { id:4, name:'N. オイル', category:'スタイリング', currentStock:25, optimalStock:15, unitPrice:3400, supplier:'ナプラ', alias:'Nドット' }
+  ];
+  staff = [
+    { id:1, name:'田中美香', role:'店長', staffCode:'ST001', joinDate:'2020-04-01' },
+    { id:2, name:'佐藤花子', role:'スタイリスト', staffCode:'ST002', joinDate:'2021-06-15' },
+    { id:3, name:'山田太郎', role:'アシスタント', staffCode:'ST003', joinDate:'2023-03-01' }
+  ];
+  transactions = [];
+}
+
+function initializeApp(){
+  // ローカル：未保存なら初回サンプル投入（1回だけ）
+  if(!isCloudMode){
+    const saved = loadLocal('beautyInventoryData');
+    if(saved){
+      products = saved.products || [];
+      staff = saved.staff || [];
+      transactions = saved.transactions || [];
+    }else if(!localStorage.getItem('seededV1')){
+      seedLocalSamples_();
+      localStorage.setItem('seededV1','true');
+      saveAllData();
+    }
+  }
+
+  renderProducts();
+  renderStaff();
+  renderTransactions();
+  refreshSelectors();
+  updateDashboard();
+  updateReport();
+  updateStats();
+
+  byId('cloudStatus').textContent = isCloudMode ? 'クラウド' : 'ローカル';
+}
+
+function switchTab(ev, name){
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  ev.currentTarget.classList.add('active');
+  ['products','staff','transactions','reports','settings'].forEach(id=>{
+    byId('tab-'+id).classList.add('hidden');
+  });
+  byId('tab-'+name).classList.remove('hidden');
+  if(name==='reports') updateReport();
+  if(name==='settings') updateStats();
+}
+
+/* =========================
+   5) ローカル保存/読込
+========================= */
+function saveAllData(){
+  saveLocal('beautyInventoryData', {
+    products, staff, transactions, savedAt: new Date().toISOString(), version:'1.0'
+  });
+  saveLocal('beautyInventoryUsers', users);
+}
+
+/* =========================
+   6) クラウド同期
+========================= */
+let syncInProgress = false;
+
+async function saveToCloud(){
+  if(!isCloudMode || !db){ saveAllData(); showToast('💾 ローカル保存'); return; }
+  if(syncInProgress){ showToast('⏳ 同期中...'); return; }
+  syncInProgress=true;
+  try{
+    const batch = db.batch();
+    products.forEach(p=> batch.set(db.collection('products').doc(String(p.id)), p));
+    staff.forEach(s=> batch.set(db.collection('staff').doc(String(s.id)), s));
+    transactions.forEach(t=> batch.set(db.collection('transactions').doc(String(t.id)), t));
+    await batch.commit();
+    showToast('☁️ クラウド保存完了');
+  }catch(e){
+    alert('保存エラー: '+e.message);
+  }finally{
+    syncInProgress=false;
+  }
+}
+
+async function loadCloudData(){
+  if(!isCloudMode || !db){ // ローカルロード
+    const saved = loadLocal('beautyInventoryData');
+    if(saved){ products=saved.products||[]; staff=saved.staff||[]; transactions=saved.transactions||[]; }
+    return;
+  }
+  if(syncInProgress) return;
+  syncInProgress=true;
+  try{
+    for(const col of ['products','staff','transactions']){
+      window[col] = []; // ★ 必ず先に空に
+      const snapshot = await db.collection(col).get();
+      snapshot.forEach(doc => window[col].push(doc.data()));
+    }
+    // 並べ替え
+    products.sort((a,b)=>a.id-b.id);
+    staff.sort((a,b)=>a.id-b.id);
+    transactions.sort((a,b)=>b.id-a.id);
+    // 描画更新
+    if(byId('app') && !byId('app').classList.contains('hidden')){
+      renderProducts(); renderStaff(); renderTransactions(); refreshSelectors(); updateDashboard(); updateReport();
+    }
+    showToast('📥 クラウド読込完了');
+  }catch(e){
+    alert('読込エラー: '+e.message);
+  }finally{
+    syncInProgress=false;
+  }
+}
+
+async function clearCloudData(){
+  if(!isCloudMode || !db){ alert('クラウド未接続'); return; }
+  if(!confirm('⚠️ クラウドの全データを削除します。よろしいですか？')) return;
+  try{
+    const batch = db.batch();
+    for(const col of ['products','staff','transactions']){
+      const snap = await db.collection(col).get();
+      snap.forEach(doc => batch.delete(doc.ref));
+    }
+    await batch.commit();
+    // ローカルも即時クリア＆描画
+    products=[]; staff=[]; transactions=[];
+    saveAllData();
+    renderProducts(); renderStaff(); renderTransactions(); refreshSelectors(); updateDashboard(); updateReport(); updateStats();
+    showToast('🗑️ クラウドデータ削除 完了');
+  }catch(e){
+    alert('削除エラー: '+e.message);
+  }
+}
+
+/* =========================
+   7) ダッシュボード/レポート
+========================= */
+function updateDashboard(){
+  const low = products.filter(p => (p.currentStock - p.optimalStock) < 0).length;
+  const ok = products.length - low;
+  const value = products.reduce((s,p)=> s + (p.currentStock*p.unitPrice||0), 0);
+  byId('kpiProducts').textContent = products.length;
+  byId('kpiLow').textContent = low;
+  byId('kpiOk').textContent = ok;
+  byId('kpiValue').textContent = '¥'+ value.toLocaleString();
+}
+
+function calcMonthly(){
+  const ym = new Date().toISOString().slice(0,7);
+  const tx = transactions.filter(t=> t.type==='order' && (t.date||'').startsWith(ym));
+  let total=0; const totals={}, counts={}, qtys={};
+  const details=[];
+  tx.forEach(t=>{
+    const p = products.find(x=>x.id===t.productId);
+    if(!p || !p.supplier) return;
+    const amount = (p.unitPrice||0) * (t.quantity||0);
+    total += amount;
+    totals[p.supplier] = (totals[p.supplier]||0)+amount;
+    counts[p.supplier] = (counts[p.supplier]||0)+1;
+    qtys[p.supplier]   = (qtys[p.supplier]||0)+(t.quantity||0);
+    details.push({ supplier:p.supplier, name:p.name, amount, quantity:t.quantity, date:t.date, time:t.time, staff:t.staffName, memo:t.memo });
+  });
+  return { total, totals, counts, qtys, details };
+}
+
+function updateReport(){
+  const r = calcMonthly();
+  byId('monthlyAmount').textContent = '¥'+r.total.toLocaleString();
+  byId('supplierCount').textContent = Object.keys(r.totals).length;
+  byId('transactionCount').textContent = r.details.length;
+  const now = new Date(); byId('lastUpdate').textContent = ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')};
+
+  const tbody = byId('supplierReport'); tbody.innerHTML='';
+  const entries = Object.entries(r.totals).sort((a,b)=>b[1]-a[1]);
+  if(entries.length===0){
+    tbody.innerHTML = <tr><td colspan="5" style="text-align:center;color:#6b7280;padding:24px;">今月の発注データはありません</td></tr>;
+    return;
+  }
+  entries.forEach(([s,amt])=>{
+    const perc = r.total>0 ? (amt/r.total*100).toFixed(1) : 0;
+    const count = r.counts[s]||0;
+    const q = r.qtys[s]||0;
+    const avg = q>0 ? Math.round(amt/q) : 0;
+    const bar = <div style="width:120px;height:6px;background:#eee;border-radius:4px;"><div style="width:${perc}%;height:6px;background:#8b5cf6;border-radius:4px;"></div></div>;
+    tbody.insertAdjacentHTML('beforeend', <tr>
+      <td><b>${s}</b></td><td>¥${amt.toLocaleString()}</td><td style="display:flex;align-items:center;gap:8px;">${perc}% ${bar}</td><td>${count}</td><td>¥${avg.toLocaleString()}</td>
+    </tr>);
+  });
+}
+
+function updateStats(){
+  byId('statProducts').textContent = products.length;
+  byId('statStaff').textContent = staff.length;
+  byId('statTransactions').textContent = transactions.length;
+}
+
+/* =========================
+   8) 商品
+========================= */
+function showAddProduct(){ byId('addProductArea').classList.remove('hidden'); }
+function hideAddProduct(){ byId('addProductArea').classList.add('hidden'); ['productName','optimalStock','unitPrice','supplier','category','alias'].forEach(id=> byId(id).value=''); }
+
+function addProduct(){
+  const name = byId('productName').value.trim();
+  const optimal = parseInt(byId('optimalStock').value,10);
+  const unit = parseInt(byId('unitPrice').value,10) || 0;
+  const supplier = byId('supplier').value.trim();
+  const category = byId('category').value;
+  const alias = byId('alias').value.trim();
+
+  if(!name || !optimal || !supplier){ alert('商品名・適正在庫・仕入先は必須'); return; }
+  const maxId = products.length? Math.max(...products.map(p=>p.id)): 0;
+  products.push({ id:maxId+1, name, category, currentStock:0, optimalStock:optimal, unitPrice:unit, supplier, alias });
+  renderProducts(); refreshSelectors(); updateDashboard(); updateReport();
+  hideAddProduct();
+  isCloudMode? saveToCloud(): saveAllData();
+  showToast('商品を追加しました');
+}
+
+function renderProducts(){
+  const tb = byId('productsTable'); tb.innerHTML='';
+  products.forEach(p=>{
+    const row = document.createElement('tr');
+    if(editingProductId===p.id){
+      row.innerHTML = 
+        <td><input class="edit-name" value="${p.name}"/></td>
+        <td><input class="edit-supplier" value="${p.supplier}"/></td>
+        <td>${p.category}</td>
+        <td><input class="edit-stock" type="number" value="${p.currentStock}" style="max-width:90px;"/> 本</td>
+        <td><input class="edit-opt" type="number" value="${p.optimalStock}" style="max-width:90px;"/> 本</td>
+        <td><input class="edit-unit" type="number" value="${p.unitPrice}" style="max-width:110px;"/></td>
+        <td>
+          <button class="btn" onclick="saveProduct(${p.id})">保存</button>
+          <button class="btn btn-secondary" onclick="cancelEdit()">取消</button>
+        </td>;
+    }else{
+      row.innerHTML = 
+        <td>${p.name}${p.alias?<br><small style="color:#6b7280;">別名: ${p.alias}</small>:''}</td>
+        <td><b>${p.supplier}</b></td>
+        <td>${p.category}</td>
+        <td>${p.currentStock} 本</td>
+        <td>${p.optimalStock} 本</td>
+        <td>¥${(p.unitPrice||0).toLocaleString()}</td>
+        <td>
+          <button class="btn" onclick="editProduct(${p.id})">編集</button>
+          <button class="btn btn-danger" onclick="deleteProduct(${p.id})">削除</button>
+        </td>;
+    }
+    tb.appendChild(row);
+  });
+}
+
+function editProduct(id){ editingProductId=id; renderProducts(); }
+function cancelEdit(){ editingProductId=null; renderProducts(); }
+
+function saveProduct(id){
+  const tr = document.querySelector(#productsTable tr:nth-child(${products.findIndex(p=>p.id===id)+1}));
+  const name = tr.querySelector('.edit-name').value.trim();
+  const supplier = tr.querySelector('.edit-supplier').value.trim();
+  const stock = parseInt(tr.querySelector('.edit-stock').value,10);
+  const opt = parseInt(tr.querySelector('.edit-opt').value,10);
+  const unit = parseInt(tr.querySelector('.edit-unit').value,10)||0;
+  if(!name || !supplier){ alert('商品名と仕入先は必須'); return; }
+  const idx = products.findIndex(p=>p.id===id);
+  products[idx] = { ...products[idx], name, supplier, currentStock:stock, optimalStock:opt, unitPrice:unit };
+  editingProductId=null; renderProducts(); updateDashboard(); updateReport();
+  isCloudMode? saveToCloud(): saveAllData();
+  showToast('商品を更新しました');
+}
+
+function deleteProduct(id){
+  const p = products.find(x=>x.id===id); if(!p) return;
+  if(!confirm(「${p.name}」を削除しますか？関連する取引も消えます。)) return;
+  transactions = transactions.filter(t=>t.productId!==id);
+  products = products.filter(x=>x.id!==id);
+  renderProducts(); renderTransactions(); refreshSelectors(); updateDashboard(); updateReport();
+  isCloudMode? saveToCloud(): saveAllData();
+  showToast('商品を削除しました');
+}
+
+function deleteAllProducts(){
+  if(!confirm(全商品(${products.length})を削除します。続行しますか？)) return;
+  const ids = products.map(p=>p.id);
+  transactions = transactions.filter(t=> !ids.includes(t.productId));
+  products = [];
+  renderProducts(); renderTransactions(); refreshSelectors(); updateDashboard(); updateReport();
+  isCloudMode? saveToCloud(): saveAllData();
+  showToast('全商品を削除しました');
+}
+
+/* =========================
+   9) スタッフ
+========================= */
+function renderStaff(){
+  const tb = byId('staffTable'); tb.innerHTML='';
+  staff.forEach(s=>{
+    const row = document.createElement('tr');
+    row.innerHTML = 
+      <td>${s.staffCode||''}</td><td>${s.name}</td>
+      <td><span class="tag ${s.role==='店長'?'tag-purple':s.role==='スタイリスト'?'tag-blue':'tag-green'}">${s.role||'スタッフ'}</span></td>
+      <td>${s.joinDate||''}</td>
+      <td><button class="btn btn-danger" onclick="deleteStaff(${s.id})">削除</button></td>;
+    tb.appendChild(row);
+  });
+}
+
+function deleteStaff(id){
+  const s = staff.find(x=>x.id===id); if(!s) return;
+  if(!confirm(「${s.name}」を削除しますか？)) return;
+  staff = staff.filter(x=>x.id!==id);
+  renderStaff(); refreshSelectors();
+  isCloudMode? saveToCloud(): saveAllData();
+  showToast('スタッフを削除しました');
+}
+
+/* =========================
+   10) 取引
+========================= */
+function refreshSelectors(){
+  const selP = byId('transactionProduct'); if(selP){ selP.innerHTML='<option value="">商品を選択</option>'; products.forEach(p=> selP.insertAdjacentHTML('beforeend', <option value="${p.id}">${p.name}</option>)); }
+  const selS = byId('transactionStaff'); if(selS){ selS.innerHTML='<option value="">担当を選択</option>'; staff.forEach(s=> selS.insertAdjacentHTML('beforeend', <option>${s.name}</option>)); }
+  const ocrS = byId('ocrStaffSelect'); if(ocrS){ ocrS.innerHTML='<option value="">担当スタッフを選択</option>'; staff.forEach(s=> ocrS.insertAdjacentHTML('beforeend', <option>${s.name}</option>)); }
+}
+
+function showAddTransaction(){ byId('addTransactionArea').classList.remove('hidden'); }
+function hideAddTransaction(){ byId('addTransactionArea').classList.add('hidden'); ['transactionProduct','transactionQuantity','transactionStaff','transactionMemo'].forEach(id=>byId(id).value=''); byId('transactionType').value='use'; }
+
+function addTransaction(){
+  const productId = parseInt(byId('transactionProduct').value,10);
+  const type = byId('transactionType').value;
+  const qty = parseInt(byId('transactionQuantity').value,10);
+  const staffName = byId('transactionStaff').value;
+  const memo = byId('transactionMemo').value;
+  if(!productId || !qty || !staffName){ alert('商品・数量・担当者は必須'); return; }
+  const now = new Date();
+  const tx = { id: Date.now(), productId, type, quantity:qty, date:fmtYmd(now), time:fmtHm(now), staffName, memo };
+  transactions.unshift(tx);
+  const p = products.find(x=>x.id===productId);
+  if(p){
+    if(type==='receipt') p.currentStock += qty;
+    if(type==='use' || type==='sale') p.currentStock = Math.max(0, p.currentStock-qty);
+  }
+  renderTransactions(); renderProducts(); updateDashboard(); updateReport(); hideAddTransaction();
+  isCloudMode? saveToCloud(): saveAllData();
+  showToast('取引を追加しました');
+}
+
+function renderTransactions(){
+  const tb = byId('transactionsTable'); tb.innerHTML='';
+  const styles = { order:'tag-blue', receipt:'tag-green', use:'tag-orange', sale:'tag-purple' };
+  const labels = { order:'発注', receipt:'入荷', use:'使用', sale:'販売' };
+  transactions.forEach(t=>{
+    const p = products.find(x=>x.id===t.productId);
+    const name = p? p.name: 削除された商品 (ID:${t.productId});
+    tb.insertAdjacentHTML('beforeend', <tr>
+      <td>${t.date} <small>${t.time}</small></td>
+      <td>${name}</td>
+      <td><span class="tag ${styles[t.type]||'tag-blue'}">${labels[t.type]||t.type}</span></td>
+      <td>${t.quantity}</td>
+      <td>${t.staffName||''}</td>
+      <td>${t.memo||''}</td>
+      <td><button class="btn btn-danger" onclick="deleteTransaction(${t.id})">削除</button></td>
+    </tr>);
+  });
+}
+
+function deleteTransaction(id){
+  const t = transactions.find(x=>x.id===id); if(!t) return;
+  const p = products.find(x=>x.id===t.productId);
+  if(!confirm(この取引を削除しますか？\n商品:${p?p.name:ID:${t.productId}} 種別:${t.type} 数量:${t.quantity})) return;
+  if(p){
+    if(t.type==='receipt') p.currentStock = Math.max(0, p.currentStock - t.quantity);
+    if(t.type==='use' || t.type==='sale') p.currentStock += t.quantity;
+  }
+  transactions = transactions.filter(x=>x.id!==id);
+  renderTransactions(); renderProducts(); updateDashboard(); updateReport();
+  isCloudMode? saveToCloud(): saveAllData();
+  showToast('取引を削除しました');
+}
+
+/* =========================
+   11) CSV（簡易）
+========================= */
+function showCsvModal(type){
+  if(!window.papaParseAvailable){ alert('CSV機能が利用できません'); return; }
+  currentCsvType = type;
+  const input = document.createElement('input'); input.type='file'; input.accept='.csv';
+  input.onchange = (e)=>{
+    const file = e.target.files[0]; if(!file){return;}
+    Papa.parse(file, {
+      header:true, skipEmptyLines:true, dynamicTyping:true, complete: ({data})=>{
+        if(type==='products'){
+          data.forEach(r=>{
+            if(!r.name || !r.supplier) return;
+            const maxId = products.length? Math.max(...products.map(p=>p.id)):0;
+            products.push({
+              id:maxId+1, name:r.name, category:r.category||'その他',
+              currentStock: Number(r.currentStock||0),
+              optimalStock: Number(r.optimalStock||0),
+              unitPrice: Number(r.unitPrice||0),
+              supplier: r.supplier, alias: r.alias||''
+            });
+          });
+          renderProducts(); refreshSelectors(); updateDashboard(); updateReport();
+        }else{
+          data.forEach(r=>{
+            if(!r.name) return;
+            const maxId = staff.length? Math.max(...staff.map(s=>s.id)):0;
+            staff.push({ id:maxId+1, name:r.name, role:r.role||'スタッフ', staffCode:r.staffCode||'', joinDate:r.joinDate||'' });
+          });
+          renderStaff(); refreshSelectors();
+        }
+        isCloudMode? saveToCloud(): saveAllData();
+        showToast('CSVインポート完了');
+      },
+      error: (err)=> alert('CSV読み込みエラー: '+err.message)
+    });
+  };
+  input.click();
+}
+
+/* =========================
+   12) エクスポート/インポート
+========================= */
+function exportData(){
+  const blob = new Blob([JSON.stringify({products,staff,transactions},null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='inventory_export.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+function importData(){
+  const inp = document.createElement('input'); inp.type='file'; inp.accept='application/json';
+  inp.onchange = (e)=>{
+    const f=e.target.files[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = ()=>{
+      try{
+        const j=JSON.parse(r.result);
+        products=j.products||[]; staff=j.staff||[]; transactions=j.transactions||[];
+        renderProducts(); renderStaff(); renderTransactions(); refreshSelectors(); updateDashboard(); updateReport(); updateStats();
+        isCloudMode? saveToCloud(): saveAllData();
+        showToast('インポート完了');
+      }catch(err){ alert('JSONエラー: '+err.message); }
+    };
+    r.readAsText(f,'utf-8');
+  };
+  inp.click();
+}
+
+/* =========================
+   13) OCR（Tesseract.js v4 + EXIF補正）
+========================= */
+function openOCRModal(){
+  if(!window.tesseractAvailable || !window.Tesseract){ alert('OCRモジュールが読み込まれていません'); return; }
+  byId('ocrPreview').classList.add('hidden');
+  byId('ocrResults').classList.add('hidden');
+  byId('ocrLoading').classList.add('hidden');
+  byId('ocrModal').classList.add('show');
+}
+function closeOCRModal(){ byId('ocrModal').classList.remove('show'); }
+function printOCRTemplate(){
+  const w=window.open('','_blank');
+  w.document.write(<html><head><title>在庫使用記録シート</title></head><body style="font-family:Meiryo;font-size:16pt;line-height:2.2;padding:30px;">
+    <h2 style="text-align:center;">在庫使用記録シート</h2>
+    <p>日付: ____________　担当: ____________</p><hr/>
+    <div>□ キャラデコ _______ 本</div>
+    <div>□ OX _______ 本</div>
+    <div>□ ミルフィ _______ 本</div>
+    <div>□ キラテラ _______ 本</div>
+    <div>□ シェルパホームケア _______ 本</div>
+    <div>□ その他: _____________ _______ 本</div>
+    <hr/><p>備考: ________________________________</p>
+  </body></html>);
+  w.document.close(); w.print();
+}
+
+// EXIF回転を正してCanvasに描画 → dataURL返す
+function loadImageWithOrientation(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = function(){
+      let dataUrl = reader.result; // base64
+      try{
+        const exif = window.piexif? piexif.load(dataUrl): null;
+        const orientation = exif? (exif['0th'][piexif.ImageIFD.Orientation] || 1) : 1;
+        const img = new Image();
+        img.onload = ()=>{
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          let w=img.naturalWidth, h=img.naturalHeight;
+          // 回転
+          if(orientation>4){ canvas.width = h; canvas.height = w; }
+          else { canvas.width = w; canvas.height = h; }
+          switch(orientation){
+            case 2: ctx.translate(w,0); ctx.scale(-1,1); break;
+            case 3: ctx.translate(w,h); ctx.rotate(Math.PI); break;
+            case 4: ctx.translate(0,h); ctx.scale(1,-1); break;
+            case 5: ctx.rotate(0.5*Math.PI); ctx.scale(1,-1); break;
+            case 6: ctx.rotate(0.5*Math.PI); ctx.translate(0,-h); break;
+            case 7: ctx.rotate(0.5*Math.PI); ctx.translate(w,-h); ctx.scale(-1,1); break;
+            case 8: ctx.rotate(-0.5*Math.PI); ctx.translate(-w,0); break;
+          }
+          // 描画（縮小しすぎないよう最大辺2000px程度に）
+          let maxSide = 2000;
+          let scale = Math.min(1, maxSide/Math.max(img.naturalWidth,img.naturalHeight));
+          const dw = img.naturalWidth*scale;
+          const dh = img.naturalHeight*scale;
+          // orientation考慮して再調整
+          if(orientation>4){ canvas.width = dh; canvas.height = dw; }
+          else { canvas.width = dw; canvas.height = dh; }
+          ctx.setTransform(1,0,0,1,0,0);
+          // 再度回転適用
+          switch(orientation){
+            case 2: ctx.translate(dw,0); ctx.scale(-1,1); break;
+            case 3: ctx.translate(dw,dh); ctx.rotate(Math.PI); break;
+            case 4: ctx.translate(0,dh); ctx.scale(1,-1); break;
+            case 5: ctx.rotate(0.5*Math.PI); ctx.scale(1,-1); ctx.translate(0,-dw); break;
+            case 6: ctx.rotate(0.5*Math.PI); ctx.translate(0,-dh); break;
+            case 7: ctx.rotate(0.5*Math.PI); ctx.translate(dw,-dh); ctx.scale(-1,1); break;
+            case 8: ctx.rotate(-0.5*Math.PI); ctx.translate(-dw,0); break;
+          }
+          ctx.drawImage(img,0,0,dw,dh);
+          resolve(canvas.toDataURL('image/jpeg',0.9));
+        };
+        img.onerror = reject;
+        img.src = dataUrl;
+      }catch(err){
+        // EXIF読めなくてもそのまま返す
+        resolve(dataUrl);
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+let ocrWorker = null;
+
+async function ensureOCRWorker(){
+  if(ocrWorker) return ocrWorker;
+  // 日本語モデル利用（tessdata CDN）
+  ocrWorker = await Tesseract.createWorker({
+    logger: m => { /* console.log(m); */ },
+    langPath: 'https://tessdata.projectnaptha.com/4.0.0'
+  });
+  await ocrWorker.loadLanguage('jpn');
+  await ocrWorker.initialize('jpn');
+  // PSM=6: 単一ブロックの可読テキスト（フォームに向く）
+  await ocrWorker.setParameters({ tessedit_pageseg_mode: '6' });
+  return ocrWorker;
+}
+
+async function handleOCRFile(ev){
+  const f = ev.target.files[0]; if(!f) return;
+  const dataUrl = await loadImageWithOrientation(f);
+  byId('ocrPreview').innerHTML = <img src="${dataUrl}"/>;
+  byId('ocrPreview').classList.remove('hidden');
+  byId('ocrResults').classList.add('hidden');
+  byId('ocrLoading').classList.remove('hidden');
+
+  try{
+    const worker = await ensureOCRWorker();
+    const { data:{ text } } = await worker.recognize(dataUrl);
+    byId('ocrLoading').classList.add('hidden');
+    // 解析→候補
+    const records = parseInventoryText(text);
+    renderOCRTable(records);
+    byId('ocrResults').classList.remove('hidden');
+  }catch(e){
+    byId('ocrLoading').classList.add('hidden');
+    alert('OCRエラー: '+e.message);
+  }
+}
+
+// テキスト→ {name, qty, unit}[] 抽出（見出し語 + フリーテキスト推定）
+function parseInventoryText(text){
+  const norm = normalizeJa(text);
+  const lines = norm.split('\n').map(s=>s.trim()).filter(Boolean);
+  const out = [];
+
+  // 1) 行ごとの「商品名 ... 数量 ... 単位」パターン
+  const rowRe = /(.*?)(?:[:：\s\-]*)(\d+(?:\.\d+)?)[\s]*(ml|g|本|個)?$/i;
+
+  // 2) 見出しスタイル
+  let current = {name:'', qty:null, unit:''};
+  lines.forEach(line=>{
+    // 見出し
+    const kv = /^(商品名|品名)[:：]\s*(.+)$/.exec(line);
+    if(kv){ current.name = kv[2]; return; }
+    const qv = /^(数量|個数)[:：]\s*(\d+(?:\.\d+)?)/.exec(line);
+    if(qv){ current.qty = Number(qv[2]); return; }
+    const uv = /^(単位)[:：]\s*(ml|g|本|個)/i.exec(line);
+    if(uv){ current.unit = uv[2]; return; }
+
+    // 1行パターン
+    const m = rowRe.exec(line);
+    if(m){
+      out.push({ name:m[1].trim(), qty: Number(m[2]), unit: (m[3]||'本') });
+      current = {name:'', qty:null, unit:''};
+    }
+  });
+  if(current.name && current.qty){ out.push(current); }
+
+  // 3) 商品マスタと照合（ゆるふわ一致）
+  return out.map(r=>{
+    const match = fuzzyProductMatch(r.name);
+    return { name: match? match.name: r.name, qty: r.qty||1, unit: r.unit||'本', productId: match? match.id: null };
+  });
+}
+
+function normalizeJa(s){
+  return s.replace(/\r/g,'')
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/[‐－ー―]/g,'-')
+    .replace(/[ \t]+/g,' ')
+    .replace(/\u3000/g,' ')
+    .trim();
+}
+
+// 商品名のファジーマッチ（エイリアス列も使用）
+function fuzzyProductMatch(query){
+  const q = normalizeJa(query).toLowerCase();
+  if(!q) return null;
+  let best=null, bestScore=1e9;
+  products.forEach(p=>{
+    const names = [p.name, ...(p.alias? p.alias.split(',').map(s=>s.trim()): [])];
+    names.forEach(n=>{
+      const sc = lev(q, normalizeJa(n).toLowerCase());
+      if(sc<bestScore){ bestScore=sc; best=p; }
+    });
+  });
+  // 閾値は適宜調整（短文なので距離3以内）
+  return (bestScore<=3) ? best : null;
+}
+
+function lev(a,b){
+  const m = Array(a.length+1).fill(null).map(()=>Array(b.length+1).fill(0));
+  for(let i=0;i<=a.length;i++) m[i][0]=i;
+  for(let j=0;j<=b.length;j++) m[0][j]=j;
+  for(let i=1;i<=a.length;i++){
+    for(let j=1;j<=b.length;j++){
+      const c = a[i-1]===b[j-1]?0:1;
+      m[i][j] = Math.min(m[i-1][j]+1, m[i][j-1]+1, m[i-1][j-1]+c);
+    }
+  }
+  return m[a.length][b.length];
+}
+
+function renderOCRTable(records){
+  const tb = byId('ocrTableBody'); tb.innerHTML='';
+  records.forEach((r,idx)=>{
+    const selId = ocrProdSel_${idx};
+    const qtyId = ocrQty_${idx};
+    const unitId = ocrUnit_${idx};
+    // 商品候補セレクト
+    let opts = <option value="">（候補から選択）</option>;
+    products.forEach(p=>{
+      const selected = (r.productId===p.id)? 'selected':'';
+      opts += <option value="${p.id}" ${selected}>${p.name}</option>;
+    });
+    tb.insertAdjacentHTML('beforeend', <tr>
+      <td>
+        <div style="display:flex; gap:6px;">
+          <select id="${selId}" style="min-width:260px;">${opts}</select>
+          <input type="text" value="${r.name||''}" data-free-name="${idx}" placeholder="フリー入力（候補なし時）" />
+        </div>
+      </td>
+      <td><input id="${qtyId}" type="number" value="${r.qty||1}" style="max-width:100px; text-align:right;"></td>
+      <td>
+        <select id="${unitId}" style="max-width:110px;">
+          ${['本','個','ml','g'].map(u=><option ${r.unit===u?'selected':''}>${u}</option>).join('')}
+        </select>
+      </td>
+      <td><button class="btn btn-danger" onclick="this.closest('tr').remove()">削除</button></td>
+    </tr>);
+  });
+}
+
+function addOCRRow(){
+  renderOCRTable([{name:'',qty:1,unit:'本',productId:null}].concat(getOCRRows()));
+}
+
+function getOCRRows(){
+  const rows = [];
+  const tb = byId('ocrTableBody');
+  [...tb.querySelectorAll('tr')].forEach((tr,idx)=>{
+    const sel = tr.querySelector('select[id^="ocrProdSel_"]');
+    const nameInput = tr.querySelector('input[type="text"]');
+    const qty = parseInt(tr.querySelector('input[type="number"]').value,10)||1;
+    const unit = tr.querySelector('select[id^="ocrUnit_"]').value;
+    const pid = sel.value? Number(sel.value): null;
+    const name = pid? (products.find(p=>p.id===pid)?.name||'') : (nameInput.value.trim()||'');
+    rows.push({ productId: pid, name, qty, unit });
+  });
+  return rows;
+}
+
+function confirmOCRRecords(){
+  const staffName = byId('ocrStaffSelect').value;
+  if(!staffName){ alert('担当スタッフを選択してください'); return; }
+  const rows = getOCRRows().filter(r=> (r.productId || r.name) && r.qty>0);
+  if(rows.length===0){ alert('登録対象がありません'); return; }
+  const now = new Date();
+  rows.forEach(r=>{
+    let pid = r.productId;
+    // 候補がなければ名前から新規商品（とりあえずカテゴリその他）
+    if(!pid){
+      const maxId = products.length? Math.max(...products.map(p=>p.id)) : 0;
+      const newP = { id:maxId+1, name:r.name, category:'その他', currentStock:0, optimalStock:0, unitPrice:0, supplier:'', alias:'' };
+      products.push(newP); pid = newP.id;
+    }
+    transactions.unshift({
+      id: Date.now()+Math.floor(Math.random()*1000),
+      productId: pid, type:'use', quantity:r.qty,
+      date: fmtYmd(now), time: fmtHm(now),
+      staffName, memo: OCR(${r.unit})
+    });
+    const p = products.find(x=>x.id===pid);
+    if(p) p.currentStock = Math.max(0, (p.currentStock||0) - r.qty);
+  });
+  renderTransactions(); renderProducts(); updateDashboard(); updateReport();
+  isCloudMode? saveToCloud(): saveAllData();
+  closeOCRModal();
+  showToast('✅ OCR結果を登録しました');
+}
+
+/* =========================
+   14) 起動時にFirebase設定復元
+========================= */
+(function boot(){
+  const cfg = loadLocal('firebaseConfig');
+  if(cfg && window.firebaseAvailable){
+    try{ firebase.initializeApp(cfg); db=firebase.firestore(); isCloudMode=true; byId('modeText').textContent='クラウド同期'; byId('cloudStatus').textContent='接続済み'; }catch(e){}
+  }
+})();
+</script>
+</body>
+</html>
